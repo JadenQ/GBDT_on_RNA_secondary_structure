@@ -87,7 +87,6 @@ similaritiesOfSM <- as.matrix(read.table(file = "./SM-miRNA/similar/SM_similarit
     Ws<-(1-a)*Ns*LastWs+a*Ws0
     Distance=norm((Ws-LastWs),type=c("2")) #2-r norm
   }
-  
   #########################
   #create k-similar matrix
   #########################
