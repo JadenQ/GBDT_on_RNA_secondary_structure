@@ -1,0 +1,1 @@
+gbdt_ver.R 使用GBDT模型，对（1）（2）（3）数据集进行5折self-test
