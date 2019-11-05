@@ -12,8 +12,8 @@ library(randomForest)
 library(bst)
 # # read self-test dataset  _____5 fold cv
 #PARS_human <- read.table(file = "../data/PARS_human/ph_encode_37.csv", header = F,sep=",",skip=1)
-PARS_human <- read.table(file = "../data/PARS_yeast/py_encode_37.csv", header = F,sep=",",skip=1)
-#PARS_human <- read.table(file = "../data/SS_PDB/pdb_encode_37.csv", header = F,sep=",",skip=1)
+#PARS_human <- read.table(file = "../data/PARS_yeast/py_encode_37.csv", header = F,sep=",",skip=1)
+PARS_human <- read.table(file = "../data/SS_PDB/pdb_encode_37.csv", header = F,sep=",",skip=1)
 
 
   ###############
@@ -44,7 +44,7 @@ for(k in 1){
  # Test_data<-PARS_human[holdout[[i]],][,c(-1,-2,-151)]
  Test_data<-PARS_human[holdout[[k]],][,c(-1,-2,-151)]
  Y_test<-PARS_human[holdout[[k]],][,151]
-#####################training###################
+#####################training presettings###################
  trControl<-trainControl(method = "cv",number =3,verboseIter=TRUE)
  #trControl<-trainControl(method="none",verboseIter=TRUE)
 # gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
@@ -75,7 +75,7 @@ pcrGrid<-expand.grid(ncomp=130)
   #  xgboostModel <- xgboost(data = as.matrix(X_train), booster = "gbtree", 
   #                         label = as.matrix(Y_train), params = parameters, nthread = 2, nrounds =5, 
   #                         objective = "binary:logitraw",verbose=2)
-
+#################end of training presetting########################
 
 ############Feature selection!##############
 # xgboostModel[["feature_names"]]<-c(1:148)
@@ -88,8 +88,8 @@ for(i in 1:ncol(X_train_M)){colnames(X_train_M)[i]<-str_glue("V{i}")}
 for(i in 1:ncol(Test_data_M)){colnames(Test_data_M)[i]<-str_glue("V{i}")}
 
 #pre-settings
-xgboostRround<-40
-xgbL1Rround<-200
+xgboostRround<-30
+xgbL1Rround<-300
 xgbL2Rround<-400
 
 ############old feature###########
@@ -117,7 +117,7 @@ new.dtest <- xgb.DMatrix(data = new.features.test, label = Y_test)
 # PARS_human_result1<-predict(bst1, Test_data_M)
 
 
-###########use new feature by XGBLinear############
+###########use new feature by XGBLinear for feature selection############
 
  TrainNewf<-as.matrix(new.features.train)
  TestNewf<-as.matrix(new.features.test)
@@ -125,53 +125,58 @@ new.dtest <- xgb.DMatrix(data = new.features.test, label = Y_test)
                            eta=c(0.03))   #best for ph
  gbm2=caret::train(TrainNewf, Y_train, method = "xgbLinear", preProcess = NULL, 
 weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid)
-          ##select features importance larger than 0.0003____overall:0.9
- GoodFeatures<-rownames(gbm2Imp$importance)[which(gbm2Imp$importance>0.0003)]  #0.0004:97%
-
- xgbLinearGrid2<-expand.grid(nrounds=xgbL2Rround,lambda=c(3),alpha=c(3),
-                           eta=c(0.03))   #best for ph
- gbm2=caret::train(TrainNewf[,GoodFeatures], Y_train, method = "xgbLinear", preProcess = NULL, 
-weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid2)
-
-PARS_human_result1<-predict(gbm2,TestNewf[,GoodFeatures])
-#PARS_human_result1<-predict(bst1,Test_data_M)
-
-
-#################select features importance larger than 0.002____overall:0.9#####################
-# names <- dimnames(data.matrix(new.features.test@Dimnames[[2]][c(1:148)]))[[2]]
-# originalNames<-colnames(X_train_M)
-
-# importance_matrix <- xgb.importance(originalNames,model=xgboostModel) # importance of predictors
-# xgb.ggplot.importance(importance_matrix[,])
-# GoodFeatures<-importance$Feature[which(importance$Gain>0.02)]
-######################################################################################
-
-
-# }
-###########use the feature on XGBOOST###############
-# parameters2 <- list(eta = 0.05, maxDepth = 5, lambda = 0.5, gamma = 0.3
-#           ,subsample=0.7,verbosity=2) 
-#   bst <- xgb.train(params = parameters2, data = new.dtrain, nrounds = 300, nthread = 2,verbose=2)
-#   bst[["feature_names"]]<-c(1:dim(new.features.train)[2])
-#   for(i in 1:length(bst[["feature_names"]])){bst[["feature_names"]][i]<-str_glue("V{i}")}
-#   PARS_human_result1<- predict(bst, new.dtest)
-
-##################use gblinear on reduced features###################
-  
-  # gbm2=caret::train(X_train_M[,GoodFeatures], Y_train, method = "xgbLinear", preProcess = NULL, 
-  # weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid)
-  # PARS_human_result1<-predict(gbm2,data.frame(Test_data_M[,GoodFeatures]))
+ #select features importance larger than 0.0003____overall:0.9
+ gbm2Imp<-varImp(gbm2,scale=F)
+ GoodFeatures<-rownames(gbm2Imp$importance)[which(gbm2Imp$importance>0.00003)]  #0.0004:97% 0.0003:98%
 
 #######################USE Logistic regression###########################
 
-
-
-# glmmodel2<-glm.fit(TrainNewf, Y_train,start = NULL, etastart = NULL, mustart = NULL,
-#         offset = rep(0, nobs), family = gaussian(),
-#         control = list(), intercept = TRUE, singular.ok = TRUE)
-
-# 
+  glmmodel2<-glm(y~TrainNewf[,GoodFeatures],method = "glm.fit")
+  PARS_human_result1<-predict.glm(glmmodel2,newdata = TestNewf[,GoodFeatures])
   
+
+
+
+#USE selected NEW FEATURE AND NEW gbm (good result but not fabulous)
+          ##select features importance larger than 0.0003____overall:0.9
+
+ # xgbLinearGrid2<-expand.grid(nrounds=xgbL2Rround,lambda=c(3),alpha=c(3),
+ #                           eta=c(0.03))   #best for ph
+#  gbm2=caret::train(TrainNewf[,GoodFeatures], Y_train, method = "xgbLinear", preProcess = NULL, 
+# weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid2)
+
+# PARS_human_result1<-predict(gbm2,TestNewf[,GoodFeatures])
+
+#USE OLD FEATURE AND XGBOOST(not good of course) 
+#PARS_human_result1<-predict(bst1,Test_data_M)
+
+
+                      #################select features importance larger than 0.002____overall:0.9#####################
+                      # names <- dimnames(data.matrix(new.features.test@Dimnames[[2]][c(1:148)]))[[2]]
+                      # originalNames<-colnames(X_train_M)
+
+                      # importance_matrix <- xgb.importance(originalNames,model=xgboostModel) # importance of predictors
+                      # xgb.ggplot.importance(importance_matrix[,])
+                      # GoodFeatures<-importance$Feature[which(importance$Gain>0.02)]
+                      ######################################################################################
+
+
+# }
+                      ###########use the feature on XGBOOST###############
+                      # parameters2 <- list(eta = 0.05, maxDepth = 5, lambda = 0.5, gamma = 0.3
+                      #           ,subsample=0.7,verbosity=2) 
+                      #   bst <- xgb.train(params = parameters2, data = new.dtrain, nrounds = 300, nthread = 2,verbose=2)
+                      #   bst[["feature_names"]]<-c(1:dim(new.features.train)[2])
+                      #   for(i in 1:length(bst[["feature_names"]])){bst[["feature_names"]][i]<-str_glue("V{i}")}
+                      #   PARS_human_result1<- predict(bst, new.dtest)
+
+                      ##################use gblinear on reduced features###################
+                        
+                        # gbm2=caret::train(X_train_M[,GoodFeatures], Y_train, method = "xgbLinear", preProcess = NULL, 
+                        # weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid)
+                        # PARS_human_result1<-predict(gbm2,data.frame(Test_data_M[,GoodFeatures]))
+
+
  #PARS_human_result1<-predict(bst,new.dtest)     #use xgboost again
 
 # data1<-data.frame(Y_train,X_train)
