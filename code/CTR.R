@@ -88,8 +88,8 @@ for(i in 1:ncol(X_train_M)){colnames(X_train_M)[i]<-str_glue("V{i}")}
 for(i in 1:ncol(Test_data_M)){colnames(Test_data_M)[i]<-str_glue("V{i}")}
 
 #pre-settings
-xgboostRround<-30
-xgbL1Rround<-300
+xgboostRround<-20
+xgbL1Rround<-200
 xgbL2Rround<-400
 
 ############old feature###########
@@ -107,49 +107,68 @@ for(i in 1:dim(new.features.test)[2]){new.features.test@Dimnames[[2]][i]<-str_gl
 new.dtrain <- xgb.DMatrix(data = new.features.train, label = Y_train)
 new.dtest <- xgb.DMatrix(data = new.features.test, label = Y_test)
 
-
 ###########use new feature by XGBOOST#########
 # parameters2 <- list(eta = 0.05, maxDepth = 5, lambda = 0.5, gamma = 0.3
 #            ,subsample=0.7,verbosity=2) 
-# bst <- xgb.train(params = parameters2, data = new.dtrain, nrounds = 400, nthread = 2,verbose=2)
+# bst <- xgb.train(params = parameters2, data = new.dtrain, nrounds = xgboostRround, nthread = 2,verbose=2)
 # bst[["feature_names"]]<-new.features.test@Dimnames[[2]]
 # PARS_human_result1<-predict(bst, new.dtest)
-# PARS_human_result1<-predict(bst1, Test_data_M)
-
+#PARS_human_result1<-predict(bst1, Test_data_M)
+# bst1[["feature_names"]]<-new.features.test@Dimnames[[2]]
+# PARS_human_result1<-predict(bst1, new.dtest)
 
 ###########use new feature by XGBLinear for feature selection############
+######not sparse matrix#####
+#  TrainNewf<-as.matrix(new.features.train)
+#  TestNewf<-as.matrix(new.features.test)
+#  xgbLinearGrid<-expand.grid(nrounds=xgbL1Rround,lambda=c(5),alpha=c(5),
+#                            eta=c(0.03))   #best for ph
+#  gbm2=caret::train(TrainNewf, Y_train, method = "xgbLinear", preProcess = NULL, 
+# weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid)
+#  #select features importance larger than 0.0003____overall:0.9
+#  gbm2Imp<-varImp(gbm2,scale=F)
+#  GoodFeatures<-rownames(gbm2Imp$importance)[which(gbm2Imp$importance>0.0003)]  #0.0004:97% 0.0003:98%
 
- TrainNewf<-as.matrix(new.features.train)
- TestNewf<-as.matrix(new.features.test)
- xgbLinearGrid<-expand.grid(nrounds=xgbL1Rround,lambda=c(5),alpha=c(5),
+####$$$$#####sparse matrix#######$$$$#######
+
+#$$$$$$$$$$use xgboost
+
+ # new.dtrain<-xgb.DMatrix(data=new.features.train,label=Y_train)
+ # new.dtest<-xgb.DMatrix(data=new.features.test,label=Y_test)
+ # parametersT<-list(eta = 0.04, maxDepth = 2, lambda = 0.5, gamma = 0.3
+ #          ,subsample=0.7,verbosity=2) 
+ # bstTree<-xgb.train(params=parametersT,data=new.dtrain,nrounds=xgbL1Rround,nthred=2,verbose=2)
+
+#$$$$$$$$$$$use caret: problematic in allocating memories
+
+xgbLinearGrid<-expand.grid(nrounds=xgbL1Rround,lambda=c(5),alpha=c(5),
                            eta=c(0.03))   #best for ph
- gbm2=caret::train(TrainNewf, Y_train, method = "xgbLinear", preProcess = NULL, 
+gbm2=caret::train(new.features.train, Y_train, method = "xgbLinear", preProcess = NULL, 
 weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid)
  #select features importance larger than 0.0003____overall:0.9
  gbm2Imp<-varImp(gbm2,scale=F)
- GoodFeatures<-rownames(gbm2Imp$importance)[which(gbm2Imp$importance>0.00003)]  #0.0004:97% 0.0003:98%
-
-#######################USE Logistic regression###########################
-
-  glmmodel2<-glm(y~TrainNewf[,GoodFeatures],method = "glm.fit")
-  PARS_human_result1<-predict.glm(glmmodel2,newdata = TestNewf[,GoodFeatures])
-  
-
-
+ GoodFeatures<-rownames(gbm2Imp$importance)[which(gbm2Imp$importance>0.0003)]  #0.0004:97% 0.0003:98%
+ 
+ TrainNewf<-as.matrix(new.features.train)
+ TestNewf<-as.matrix(new.features.test)
 
 #USE selected NEW FEATURE AND NEW gbm (good result but not fabulous)
           ##select features importance larger than 0.0003____overall:0.9
 
- # xgbLinearGrid2<-expand.grid(nrounds=xgbL2Rround,lambda=c(3),alpha=c(3),
- #                           eta=c(0.03))   #best for ph
-#  gbm2=caret::train(TrainNewf[,GoodFeatures], Y_train, method = "xgbLinear", preProcess = NULL, 
-# weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid2)
+ xgbLinearGrid2<-expand.grid(nrounds=xgbL2Rround,lambda=c(1),alpha=c(1),
+                           eta=c(0.03))   #best for ph
+ gbm2=caret::train(TrainNewf[,GoodFeatures], Y_train, method = "xgbLinear", preProcess = NULL, 
+weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid2)
 
-# PARS_human_result1<-predict(gbm2,TestNewf[,GoodFeatures])
+PARS_human_result1<-predict(gbm2,TestNewf[,GoodFeatures])
 
-#USE OLD FEATURE AND XGBOOST(not good of course) 
-#PARS_human_result1<-predict(bst1,Test_data_M)
+# USE OLD FEATURE AND XGBOOST(not good of course) 
+# PARS_human_result1<-predict(bst1,Test_data_M)
+#######################USE Logistic regression ? CLASSIFICATION###########################
 
+  # glmmodel2<-glm(Y_train~TrainNewf[,GoodFeatures],method = "glm.fit")
+  # PARS_human_result1<-predict.glm(glmmodel2,newdata=as.data.frame(TestNewf[,GoodFeatures]))
+ 
 
                       #################select features importance larger than 0.002____overall:0.9#####################
                       # names <- dimnames(data.matrix(new.features.test@Dimnames[[2]][c(1:148)]))[[2]]
