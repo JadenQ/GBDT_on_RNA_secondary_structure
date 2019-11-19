@@ -1,3 +1,4 @@
+#reselect features
 library(igraph)
 library(rNMF)
 library(xgboost)
@@ -11,8 +12,8 @@ library(stringr)
 library(randomForest)
 library(bst)
 # # read self-test dataset  _____5 fold cv
-#PARS_human <- read.table(file = "../data/PARS_human/ph_encode_37.csv", header = F,sep=",",skip=1)
-PARS_human <- read.table(file = "../data/PARS_yeast/py_encode_37.csv", header = F,sep=",",skip=1)
+PARS_human <- read.table(file = "../data/PARS_human/ph_encode_37.csv", header = F,sep=",",skip=1)
+#PARS_human <- read.table(file = "../data/PARS_yeast/py_encode_37.csv", header = F,sep=",",skip=1)
 #PARS_human <- read.table(file = "../data/SS_PDB/pdb_encode_37.csv", header = F,sep=",",skip=1)
 
 
@@ -37,20 +38,21 @@ Result<-matrix(rep(0,25),5,5)
 colnames(Result)<-c("AUC","Precision","Recall","F","Accuracy")
 for(k in 1){
 #Fold-1
-  X_train<-PARS_human[-holdout[[k]],][,c(-1,-2,-151)]
+   X_train0<-PARS_human[-holdout[[i]],][,c(-1,-2,-151)]
   #Y_trian=labels
-  Y_train<-PARS_human[-holdout[[k]],][,151]
-
- # Test_data<-PARS_human[holdout[[i]],][,c(-1,-2,-151)]
- Test_data<-PARS_human[holdout[[k]],][,c(-1,-2,-151)]
- Y_test<-PARS_human[holdout[[k]],][,151]
+  Y_train0<-PARS_human[-holdout[[i]],][,151]
+  
+  # Test_data<-PARS_human[holdout[[i]],][,c(-1,-2,-151)]
+  Test_data0<-PARS_human[holdout[[i]],][,c(-1,-2,-151)]
+  Y_test0<-PARS_human[holdout[[i]],][,151]
+  threshold= 36    # the larger threshold the less samples selected
+  X_train<-X_train0[which(rowSums(X_train0)>threshold),]
+  Y_train<-Y_train0[which(rowSums(X_train0)>threshold)]
+  Test_data<-Test_data0[which(rowSums(Test_data0)>threshold),]
+  Y_test<-Y_test0[which(rowSums(Test_data0)>threshold)]
 #####################training presettings###################
  trControl<-trainControl(method = "cv",number =3,verboseIter=TRUE)
- #trControl<-trainControl(method="none",verboseIter=TRUE)
-# gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
-#                         n.trees = c(50,100,400,800,1000,1500), 
-#                         shrinkage = c(0.03,0.1),
-#                         n.minobsinnode = c(10,20))
+
 gbmGrid <-  expand.grid(n.trees = 100, 
                         interaction.depth = 3, 
                         shrinkage = 0.1,
@@ -59,22 +61,11 @@ gbmGrid <-  expand.grid(n.trees = 100,
 xgbTreeGrid<- expand.grid(nrounds=500,max_depth=c(4,5),eta=c(0.1),
                           gamma=c(0.5,1),colsample_bytree=c(0.8),min_child_weight=c(0.05),
                           subsample=c(0.7))#0.81
-#xgbLinearGrid<-expand.grid(nrounds=c(800,1000,1200,1500),lambda=c(0.8,1,2,2.5),alpha=c(0.8,1,2,2.5),eta=c(0.04,0.1))
-#xgbLinearGrid<-expand.grid(nrounds=c(600),lambda=c(3),alpha=c(3),eta=c(0.08))   #best for ph
 
-xgbDARTGrid<-expand.grid(nrounds=500,max_depth=5,eta=0.04,
-                      gamma=3,subsample=0.7,colsample_bytree=0.8,
-                      rate_drop=0.3,skip_drop=0.5,min_child_weight=2)
-glmnetGrid<-expand.grid(alpha=3,lambda=3)
-avNNetGrid<-expand.grid(size=2,decay=0.7,bag=TRUE)
-pcrGrid<-expand.grid(ncomp=130)
 
    parameters <- list(eta = 0.04, maxDepth = 2, lambda = 0.5, gamma = 0.3,
     subsample=0.7,verbosity=2) 
-  # parametersL<-list(lambda=5,alpha=5)
-  #  xgboostModel <- xgboost(data = as.matrix(X_train), booster = "gbtree", 
-  #                         label = as.matrix(Y_train), params = parameters, nthread = 2, nrounds =5, 
-  #                         objective = "binary:logitraw",verbose=2)
+ 
 #################end of training presetting########################
 
 ############Feature selection!##############
@@ -149,7 +140,7 @@ weights = NULL,trControl=trControl,metric = "RMSE",tuneGrid=xgbLinearGrid)
  TrainNewf<-as.matrix(new.features.train)
  TestNewf<-as.matrix(new.features.test)
  gbm2Imp<-varImp(gbm2,scale=F)
- GoodFeatures<-rownames(gbm2Imp$importance)[which(gbm2Imp$importance>0.00028)]  #0.0004:97% 0.0003:98%
+ GoodFeatures<-rownames(gbm2Imp$importance)[which(gbm2Imp$importance>0.00009)]  #0.0004:97% 0.0003:98%
  GoodFeatures<-intersect(GoodFeatures,colnames(TestNewf))
 
 
@@ -222,7 +213,7 @@ PARS_human_result1<-predict(gbm2,TestNewf[,GoodFeatures])
 
  # PARS_human_result1 <- predict(gbm2, data.frame(Test_data))
   PARS_human_result1 <- (PARS_human_result1-min(PARS_human_result1))/(max(PARS_human_result1)-min(PARS_human_result1))
-  true_class<-str_glue("Class{PARS_human[holdout[[k]],][,151]}")
+  true_class<-str_glue("Class{Y_test}")
   class_1_prob<-PARS_human_result1
   test_set <- data.frame(obs = true_class,
                          Class1 = class_1_prob)
